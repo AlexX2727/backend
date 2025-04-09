@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { RegisterDto } from './dto/register.dto';
 
 interface UserDto {
     email : string;
@@ -22,8 +23,8 @@ export class AuthController {
         return this.authService.getUsers();
     }
     @Post('singup')
-    signUp(@Body() user: UserDto){
-        console.log(user);
-        return this.authService.signUp(user.email, user.password);
+    signUp(@Body() registerDto: RegisterDto){
+        console.log(registerDto);
+        return this.authService.signUp(registerDto);
     }
 }

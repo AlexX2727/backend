@@ -15,9 +15,113 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
         
-model User{
-  id String @id @default(uuid())
-  email String @unique
-  password String 
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+        
+model User {
+  id                Int             @id @default(autoincrement())
+  role_id           Int
+  role              Role            @relation(fields: [role_id], references: [id])
+  firstName         String?
+  lastName          String?
+  username          String?         @unique
+  email             String          @unique
+  password          String
+  avatar            String?
+  phone             String?
+  status            Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
   
+  // Relations
+  ownedProjects     Project[]
+  projectMembers    ProjectMember[]
+  assignedTasks     Task[]
+  comments          Comment[]
+  attachments       Attachment[]
+}
+
+model Project {
+  id              Int             @id @default(autoincrement())
+  owner_id        Int
+  owner           User            @relation(fields: [owner_id], references: [id])
+  name            String
+  description     String?
+  status          String          @default("Active")
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  members         ProjectMember[]
+  tasks           Task[]
+}
+
+model ProjectMember {
+  id              Int       @id @default(autoincrement())
+  project_id      Int
+  project         Project   @relation(fields: [project_id], references: [id])
+  user_id         Int
+  user            User      @relation(fields: [user_id], references: [id])
+  role            String    @default("Member")
+  joinedAt        DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([project_id, user_id])
+}
+
+model Task {
+  id              Int         @id @default(autoincrement())
+  project_id      Int
+  project         Project     @relation(fields: [project_id], references: [id])
+  assignee_id     Int?
+  assignee        User?       @relation(fields: [assignee_id], references: [id])
+  title           String
+  description     String?
+  status          String      @default("Todo")
+  priority        String      @default("Medium")
+  dueDate         DateTime?
+  estimatedHours  Float?
+  actualHours     Float?
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  comments        Comment[]
+  attachments     Attachment[]
+}
+
+model Comment {
+  id              Int       @id @default(autoincrement())
+  task_id         Int
+  task            Task      @relation(fields: [task_id], references: [id])
+  user_id         Int
+  user            User      @relation(fields: [user_id], references: [id])
+  content         String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Attachment {
+  id              Int       @id @default(autoincrement())
+  task_id         Int
+  task            Task      @relation(fields: [task_id], references: [id])
+  user_id         Int
+  user            User      @relation(fields: [user_id], references: [id])
+  filename        String
+  originalName    String
+  path            String
+  mimeType        String
+  size            Int
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }

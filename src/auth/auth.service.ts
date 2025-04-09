@@ -49,22 +49,44 @@ export class AuthService {
        return await this.prismaService.user.findMany();
    }
 
-  async  signUp(email: string, password: string){
+async signUp(registerDto: import('./dto/register.dto').RegisterDto){
      try{
-        const userFound = await this.prismaService.user.findUnique({
+        // Check if user with this email already exists
+        const emailFound = await this.prismaService.user.findUnique({
             where: {
-                email,
+                email: registerDto.email,
             },
         });
 
-        if (userFound) throw new BadGatewayException('El usuario ya existe');
+        if (emailFound) throw new BadGatewayException('El email ya está registrado');
 
-        const hashedPaswword= await encrypt(password);
+        // Check if username is provided and if it already exists
+        if (registerDto.username) {
+            const usernameFound = await this.prismaService.user.findUnique({
+                where: {
+                    username: registerDto.username,
+                },
+            });
+
+            if (usernameFound) throw new BadGatewayException('El nombre de usuario ya está en uso');
+        }
+
+        const hashedPassword = await encrypt(registerDto.password);
 
         const user = await this.prismaService.user.create({
             data: {
-                email,
-                password: hashedPaswword,
+                email: registerDto.email,
+                password: hashedPassword,
+                username: registerDto.username,
+                firstName: registerDto.firstName,
+                lastName: registerDto.lastName,
+                avatar: registerDto.avatar,
+                phone: registerDto.phone,
+                role: {
+                    connect: {
+                        id: registerDto.role_id || 2, // Default to USER role if not specified
+                    }
+                }
             },
         });
 
