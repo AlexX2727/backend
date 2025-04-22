@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MinLength, IsBoolean } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -10,9 +10,8 @@ export class RegisterDto {
   @MinLength(6)
   password: string;
 
-  @IsNumber()
-  @IsOptional()
-  role_id?: number = 2; // Default to USER role (assuming ID 2 will be for USER)
+  // Fixed role_id=2 for client users, not modifiable
+  role_id: number = 2; // Client role
   
   @IsOptional()
   @IsString()
@@ -33,5 +32,8 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   phone?: string;
-}
 
+  @IsOptional()
+  @IsBoolean()
+  status?: boolean = true;
+}
