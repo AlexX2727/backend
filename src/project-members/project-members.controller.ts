@@ -10,6 +10,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ValidationPipe,
+  UsePipes,
 } from '@nestjs/common';
 import { ProjectMembersService } from './project-members.service';
 import { CreateProjectMemberDto } from './dto/create-project-member.dto';
@@ -27,11 +29,17 @@ export class ProjectMembersController {
   /**
    * Endpoint para agregar un nuevo miembro a un proyecto
    * Requiere autenticación
-   * @param createProjectMemberDto - Datos del miembro a agregar
+   * @param createProjectMemberDto - Datos del miembro a agregar (project_id, username/email del usuario y rol)
    * @returns El registro de miembro creado
    */
   @UseGuards(AuthGuard)
   @Post()
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true, 
+    forbidNonWhitelisted: true,
+    transformOptions: { enableImplicitConversion: false }
+  }))
   create(@Body() createProjectMemberDto: CreateProjectMemberDto) {
     return this.projectMembersService.create(createProjectMemberDto);
   }
@@ -108,6 +116,12 @@ export class ProjectMembersController {
    */
   @UseGuards(AuthGuard)
   @Patch(':id')
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true, 
+    forbidNonWhitelisted: true,
+    transformOptions: { enableImplicitConversion: false } 
+  }))
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateProjectMemberDto: UpdateProjectMemberDto,

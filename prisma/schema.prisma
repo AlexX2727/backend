@@ -48,20 +48,20 @@ model User {
 }
 
 model Project {
-  id              Int             @id @default(autoincrement())
-  owner_id        Int
-  owner           User            @relation(fields: [owner_id], references: [id])
-  name            String
-  description     String?
-  status          String          @default("Active")
-  startDate       DateTime?
-  endDate         DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
-  // Relations
-  members         ProjectMember[]
-  tasks           Task[]
+  id          Int      @id @default(autoincrement())
+  owner_id    Int
+  owner       User     @relation(fields: [owner_id], references: [id])
+  name        String
+  description String?
+  status      String   @default("Active")
+  startDate   String?  
+  endDate     String?  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  members     ProjectMember[]
+  tasks       Task[]
 }
 
 model ProjectMember {

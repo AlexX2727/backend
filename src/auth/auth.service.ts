@@ -7,41 +7,38 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class AuthService {
     constructor(private prismaService: PrismaService,     private jwtService: JwtService) {}
 
-    async logIn (email: string, password: string){
-        try{
-            //bucar si existe el correo 
-            const user = await this.prismaService.user.findUnique({
-                where: {
-                    email,
-                },
-            });
-            if (!user) {
-                throw new BadRequestException('email o contraseña incorrecta');
-            }
-            
-            const isPasswordMatch = await compare(password, user.password);
-            if (!isPasswordMatch) {
-                throw new BadRequestException('email o contraseña incorrecta');
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const {password: _, ...userWithoutPassword} = user;
-
-            const payload = {
-                userWithoutPassword
-            }
-
-            const acces_token = await this.jwtService.signAsync(payload);
-            return { acces_token};
-
-        }catch(error){
-            if (error instanceof BadRequestException) {
-                throw error;
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            throw new InternalServerErrorException('error al loguear');
-
+    async logIn(email: string, password: string) {
+        try {
+          const user = await this.prismaService.user.findUnique({
+            where: { email },
+          });
+      
+          if (!user) {
+            throw new BadRequestException("email o contraseña incorrecta");
+          }
+      
+          const isPasswordMatch = await compare(password, user.password);
+          if (!isPasswordMatch) {
+            throw new BadRequestException("email o contraseña incorrecta");
+          }
+      
+          const { password: _, ...userWithoutPassword } = user;
+      
+          const payload = { userWithoutPassword };
+          const acces_token = await this.jwtService.signAsync(payload);
+      
+          return {
+            acces_token,
+            user: userWithoutPassword,
+          };
+        } catch (error) {
+          if (error instanceof BadRequestException) {
+            throw error;
+          }
+          throw new InternalServerErrorException("error al loguear");
         }
-    }
+      }
+      
 
 
 
@@ -84,7 +81,7 @@ async signUp(registerDto: import('./dto/register.dto').RegisterDto){
                 phone: registerDto.phone,
                 role: {
                     connect: {
-                        id: registerDto.role_id || 2, // Default to USER role if not specified
+                        id: 2, // Always assign role_id 2 (client) for new registrations
                     }
                 }
             },

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { CreateProjectMemberDto } from './dto/create-project-member.dto';
+import { CreateProjectMemberDto, ProjectRole } from './dto/create-project-member.dto';
 import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
@@ -18,7 +18,12 @@ export class ProjectMembersService {
    * @returns El registro de miembro creado con información del usuario y proyecto
    */
   async create(createProjectMemberDto: CreateProjectMemberDto) {
-    const { project_id, user_id, role } = createProjectMemberDto;
+    const { project_id, user_identifier, role } = createProjectMemberDto;
+    
+    // Validación adicional para garantizar que role sea un valor válido
+    if (!Object.values(ProjectRole).includes(role)) {
+      throw new BadRequestException(`Rol inválido: ${role}. Los valores permitidos son: ${Object.values(ProjectRole).join(', ')}`);
+    }
     
     try {
       // Verificar que el proyecto existe
@@ -30,16 +35,26 @@ export class ProjectMembersService {
         throw new BadRequestException(`Proyecto con ID ${project_id} no encontrado`);
       }
       
-      // Verificar que el usuario existe
-      const userExists = await this.prisma.user.findUnique({
-        where: { id: user_id }
-      });
+      // Verificar que el usuario existe por nombre de usuario o correo
+      const userExists = await this.findUserByIdentifier(user_identifier);
       
       if (!userExists) {
-        throw new BadRequestException(`Usuario con ID ${user_id} no encontrado`);
+        throw new BadRequestException(`Usuario con nombre de usuario o correo "${user_identifier}" no encontrado`);
       }
       
-      // Agregar el miembro al proyecto
+      // Verificar si el usuario ya es miembro del proyecto
+      const existingMember = await this.prisma.projectMember.findFirst({
+        where: {
+          project_id,
+          user_id: userExists.id
+        }
+      });
+      
+      if (existingMember) {
+        throw new ConflictException(`El usuario ya es miembro de este proyecto`);
+      }
+      
+      // Agregar el miembro al proyecto con rol 'Member' por defecto
       return await this.prisma.projectMember.create({
         data: {
           project: {
@@ -49,10 +64,10 @@ export class ProjectMembersService {
           },
           user: {
             connect: {
-              id: user_id,
+              id: userExists.id,
             },
           },
-          role,
+          role, // Usar el rol proporcionado
         },
         include: {
           project: {
@@ -86,6 +101,22 @@ export class ProjectMembersService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Utilidad para encontrar un usuario por nombre de usuario o correo electrónico
+   * @param identifier - Nombre de usuario o correo electrónico
+   * @returns El usuario encontrado o null si no existe
+   */
+  async findUserByIdentifier(identifier: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: identifier },
+          { email: identifier }
+        ]
+      }
+    });
   }
 
   /**
@@ -288,16 +319,14 @@ export class ProjectMembersService {
     // Verificar que el miembro existe
     await this.findOne(id);
     
-    const { project_id, user_id, ...rest } = updateProjectMemberDto;
-    
     try {
-      // Preparar el objeto de datos para la actualización
-      const data: any = { ...rest };
-      
-      // No permitimos cambiar el proyecto o usuario, solo el rol
-      if (project_id || user_id) {
-        throw new BadRequestException('No se puede cambiar el proyecto o usuario de un miembro existente');
+      // Validación adicional para garantizar que role sea un valor válido
+      if (updateProjectMemberDto.role && !Object.values(ProjectRole).includes(updateProjectMemberDto.role)) {
+        throw new BadRequestException(`Rol inválido: ${updateProjectMemberDto.role}. Los valores permitidos son: ${Object.values(ProjectRole).join(', ')}`);
       }
+      
+      // El DTO ya está diseñado para solo aceptar el campo role
+      const data = updateProjectMemberDto;
       
       // Actualizar el miembro en la base de datos
       return await this.prisma.projectMember.update({

@@ -18,7 +18,7 @@ export class ProjectsService {
    * @returns El proyecto creado con información del propietario
    */
   async create(createProjectDto: CreateProjectDto) {
-    const { owner_id, ...rest } = createProjectDto;
+    const { owner_id, startDate, endDate, ...rest } = createProjectDto;
     
     try {
       // Verificar que el usuario existe antes de crear el proyecto
@@ -30,10 +30,16 @@ export class ProjectsService {
         throw new BadRequestException(`Usuario con ID ${owner_id} no encontrado`);
       }
       
+      // Convertir fechas a cadenas si están definidas
+      const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : null;
+      const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : null;
+
       // Crear el proyecto con los datos proporcionados
       return await this.prisma.project.create({
         data: {
           ...rest,
+          startDate: formattedStartDate,
+          endDate: formattedEndDate,
           owner: {
             connect: {
               id: owner_id,

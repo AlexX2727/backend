@@ -19,7 +19,7 @@ export class UsersService {
    * @returns El usuario creado con su información de rol
    */
   async create(createUserDto: CreateUserDto) {
-    const { password, role_id, ...rest } = createUserDto;
+    const { password, role_id = 2, ...rest } = createUserDto; // Asignar 2 como valor predeterminado para role_id
     
     try {
       // Encriptar la contraseña antes de guardarla en la base de datos
@@ -32,7 +32,7 @@ export class UsersService {
           password: hashedPassword,
           role: {
             connect: {
-              id: role_id,
+              id: role_id, // Usar el role_id proporcionado o el valor predeterminado (2)
             },
           },
         },
