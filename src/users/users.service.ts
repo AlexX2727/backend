@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -123,36 +123,63 @@ export class UsersService {
     // Verificar que el usuario existe
     await this.findOne(id);
     
-    const { password, role_id, ...rest } = updateUserDto;
+    // Log para depuración
+    Logger.debug(`UsersService.update - Recibido DTO: ${JSON.stringify(updateUserDto)}`, 'UsersService');
+    
+    const { password, role_id, ...restData } = updateUserDto;
+    
+    // Preparar el objeto de datos para la actualización
+    const data: any = {};
+    
+    // Solo incluir campos con valores válidos (no undefined ni cadenas vacías)
+    Object.entries(restData).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        data[key] = value;
+      }
+    });
+    
+    // Si se proporciona una nueva contraseña, encriptarla
+    if (password) {
+      data.password = await encrypt(password);
+    }
+    
+    // Si se proporciona un nuevo rol, actualizarlo
+    if (role_id) {
+      data.role = {
+        connect: {
+          id: role_id,
+        },
+      };
+    }
+    
+    // Verificar si hay datos para actualizar
+    if (Object.keys(data).length === 0 && !role_id) {
+      Logger.warn('No hay datos válidos para actualizar', 'UsersService');
+      // Si no hay nada que actualizar, simplemente retornar el usuario actual
+      return this.findOne(id);
+    }
     
     try {
-      // Preparar el objeto de datos para la actualización
-      const data: any = { ...rest };
+      // Log final de datos a actualizar
+      Logger.debug(`Datos finales para actualizar: ${JSON.stringify(data)}`, 'UsersService');
       
-      // Si se proporciona una nueva contraseña, encriptarla
-      if (password) {
-        data.password = await encrypt(password);
-      }
-      
-      // Si se proporciona un nuevo rol, actualizarlo
-      if (role_id) {
-        data.role = {
-          connect: {
-            id: role_id,
-          },
-        };
-      }
-      
-      // Actualizar el usuario en la base de datos
-      return await this.prisma.user.update({
+      // Ejecutar la actualización en la base de datos
+      const updatedUser = await this.prisma.user.update({
         where: { id },
         data,
         include: {
           role: true,
         },
       });
+      
+      // Log para depuración - resultado de la actualización
+      Logger.debug(`UsersService.update - Usuario actualizado: ${JSON.stringify(updatedUser)}`, 'UsersService');
+      
+      return updatedUser;
     } catch (error) {
-      // Manejar errores de unicidad o de relaciones
+      Logger.error(`Error al actualizar usuario: ${error.message}`, error.stack, 'UsersService');
+      
+      // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           throw new ConflictException('El email o username ya está en uso por otro usuario');
@@ -191,4 +218,3 @@ export class UsersService {
     }
   }
 }
-

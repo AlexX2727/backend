@@ -18,9 +18,9 @@ import {
   Optional,
   BadRequestException,
   Logger,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { Express } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -29,10 +29,6 @@ import { AuthGuard } from 'src/auth/auth.guard';
 import { CloudinaryService } from 'src/config/cloudinary.config';
 import { User } from 'src/auth/user.decorator';
 
-/**
- * Controlador para la gestión de usuarios
- * Proporciona endpoints para crear, leer, actualizar y eliminar usuarios
- */
 @Controller('users')
 export class UsersController {
   constructor(
@@ -41,9 +37,7 @@ export class UsersController {
   ) {}
 
   /**
-   * Endpoint para crear un nuevo usuario
-   * @param createUserDto - Datos del usuario a crear
-   * @returns El usuario creado con su información
+   * Crear usuario
    */
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
@@ -51,9 +45,7 @@ export class UsersController {
   }
 
   /**
-   * Endpoint para obtener todos los usuarios
-   * Requiere autenticación
-   * @returns Lista de todos los usuarios registrados
+   * Obtener usuario actual autenticado
    */
   @UseGuards(AuthGuard)
   @Get('me')
@@ -61,6 +53,9 @@ export class UsersController {
     return this.usersService.findOne(userId);
   }
 
+  /**
+   * Listar todos los usuarios
+   */
   @UseGuards(AuthGuard)
   @Get()
   findAll() {
@@ -68,10 +63,7 @@ export class UsersController {
   }
 
   /**
-   * Endpoint para obtener un usuario específico por su ID
-   * Requiere autenticación
-   * @param id - ID del usuario a buscar
-   * @returns Información del usuario solicitado
+   * Obtener usuario por ID
    */
   @UseGuards(AuthGuard)
   @Get(':id')
@@ -80,74 +72,62 @@ export class UsersController {
   }
 
   /**
-   * Endpoint para actualizar la información de un usuario
-   * Requiere autenticación
-   * @param id - ID del usuario a actualizar
-   * @param updateUserDto - Datos a actualizar del usuario
-   * @returns El usuario con la información actualizada
-   */
-  /**
-   * Endpoint para actualizar la información de un usuario, incluyendo su avatar
-   * Acepta multipart/form-data para permitir la subida de archivos
-   * Requiere autenticación
-   * @param id - ID del usuario a actualizar
-   * @param updateUserDto - Datos a actualizar del usuario (como campos de formulario)
-   * @param avatar - Archivo de imagen para el avatar (opcional)
-   * @returns El usuario con la información actualizada
+   * Actualizar usuario por ID (incluye avatar y multipart/form-data)
    */
   @UseGuards(AuthGuard)
   @Patch(':id')
   @UseInterceptors(FileInterceptor('avatar', {
-    // Configure multer to handle form data
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB max file size
-    },
+    limits: { fileSize: 5 * 1024 * 1024 },
   }))
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateUserDto: UpdateUserDto,
-    @Optional() // Make the file optional
+    @Body(new ValidationPipe({ 
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      skipMissingProperties: true
+    })) updateUserDto: UpdateUserDto,
+    @Optional()
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
           new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
         ],
-        fileIsRequired: false, // Avatar is optional
+        fileIsRequired: false,
         exceptionFactory: (error) => {
-          Logger.error(`File validation error: ${error}`, 'UserController');
-          return new BadRequestException(`Error en la validación del archivo: ${error}`);
+          Logger.warn(`Error de validación de avatar: ${error}`, 'UsersController');
+          return null;
         },
       }),
     )
     avatar?: Express.Multer.File,
   ) {
-    // Log received data for debugging
-    Logger.debug(`Updating user ${id} with data: ${JSON.stringify(updateUserDto)}`, 'UserController');
-    if (avatar) {
-      Logger.debug(`Avatar file received: ${avatar.originalname}`, 'UserController');
-    }
+    Logger.debug(`PATCH /users/${id} - Iniciando actualización`, 'UsersController');
+    Logger.debug(`PATCH /users/${id} - Datos recibidos: ${JSON.stringify(updateUserDto)}`, 'UsersController');
 
-    // If an avatar file is uploaded, process it and get the URL
+    // Subir avatar si fue enviado
     if (avatar) {
       try {
         const uploadResult = await this.cloudinaryService.uploadImage(avatar);
         updateUserDto.avatar = uploadResult.secure_url;
-        Logger.debug(`Avatar uploaded successfully to: ${uploadResult.secure_url}`, 'UserController');
+        Logger.debug(`Avatar subido a: ${uploadResult.secure_url}`, 'UsersController');
       } catch (error) {
-        Logger.error(`Error uploading avatar: ${error.message}`, error.stack, 'UserController');
+        Logger.error(`Error al subir avatar: ${error.message}`, error.stack, 'UsersController');
         throw new BadRequestException(`Error al subir el avatar: ${error.message}`);
       }
     }
-    
-    return this.usersService.update(id, updateUserDto);
+
+    const result = await this.usersService.update(id, updateUserDto);
+    return {
+      ...result,
+      success: true,
+      message: 'Perfil actualizado correctamente',
+    };
   }
 
   /**
-   * Endpoint para eliminar un usuario
-   * Requiere autenticación
-   * @param id - ID del usuario a eliminar
-   * @returns Confirmación de la eliminación
+   * Eliminar usuario por ID
    */
   @UseGuards(AuthGuard)
   @Delete(':id')
@@ -156,4 +136,3 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 }
-
