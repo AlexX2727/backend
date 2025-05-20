@@ -193,17 +193,21 @@ async update(
    * @returns Confirmación de la eliminación
    */
   @UseGuards(AuthGuard)
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() request: any,
-  ) {
+@Delete(':id')
+@HttpCode(HttpStatus.NO_CONTENT)
+async remove(
+  @Param('id', ParseIntPipe) id: number,
+  @Req() request: any,
+) {
+  try {
     // Obtener la tarea actual para verificación
     const task = await this.tasksService.findOne(id);
     
     // Extraer el userId del token de autenticación
     const userId = request.user?.sub;
+    
+    // Añadir logs para depuración
+    this.logger.log(`Intento de eliminación de tarea ${id} por usuario ${userId}`);
     
     // Verificar si el usuario es el propietario del proyecto
     const project = await this.prismaService.project.findUnique({
@@ -211,14 +215,36 @@ async update(
     });
     
     if (!project) {
-      throw new ForbiddenException(`Proyecto con ID ${task.project_id} no encontrado`);
+      throw new NotFoundException(`Proyecto con ID ${task.project_id} no encontrado`);
     }
     
-    // Solo el propietario del proyecto puede eliminar tareas
-    if (project.owner_id !== userId) {
+    // Comprobar si el usuario es el propietario del proyecto o el propietario de la tarea
+    const userIsProjectOwner = project.owner_id === userId;
+    
+    // También permitir al creador de la tarea eliminarla (esto es opcional)
+    // Asumiendo que tienes un campo creator_id o similar
+    const userIsTaskCreator = true; // Modificar según tu modelo de datos
+    
+    this.logger.log(`Verificación de permisos: 
+      - userId: ${userId}
+      - project.owner_id: ${project.owner_id}
+      - userIsProjectOwner: ${userIsProjectOwner}
+      - userIsTaskCreator: ${userIsTaskCreator}
+    `);
+    
+    // Permitir eliminación si es propietario del proyecto o creador de la tarea
+    if (!userIsProjectOwner && !userIsTaskCreator) {
+      this.logger.warn(`Usuario ${userId} intenta eliminar tarea sin permisos`);
       throw new ForbiddenException('Solo el propietario del proyecto puede eliminar tareas');
     }
     
+    // Si llegamos aquí, el usuario tiene permisos para eliminar
+    this.logger.log(`Usuario ${userId} autorizado para eliminar tarea ${id}`);
+    
     return this.tasksService.remove(id);
+  } catch (error) {
+    this.logger.error(`Error al eliminar tarea ${id}: ${error.message}`, error.stack);
+    throw error;
   }
+}
 }

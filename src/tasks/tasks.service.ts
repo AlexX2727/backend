@@ -535,23 +535,42 @@ async update(id: number, updateTaskDto: UpdateTaskDto) {
    * @returns Información de la tarea eliminada
    * @throws NotFoundException si la tarea no existe
    */
-  async remove(id: number) {
-    // Verificar que la tarea existe antes de eliminarla
-    await this.findOne(id);
+  // En tasks.service.ts - método remove modificado
+async remove(id: number) {
+  // Verificar que la tarea existe antes de eliminarla
+  await this.findOne(id);
+  
+  try {
+    // Primero, eliminar todos los comentarios asociados a la tarea
+    await this.prisma.comment.deleteMany({
+      where: { task_id: id }
+    });
     
-    try {
-      // Eliminar la tarea de la base de datos
-      return await this.prisma.task.delete({
-        where: { id },
-      });
-    } catch (error) {
-      // Manejar posibles errores de restricciones de integridad
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2003') {
-          throw new BadRequestException('No se puede eliminar la tarea porque tiene registros relacionados (comentarios o adjuntos)');
-        }
+    // Luego, eliminar todos los adjuntos asociados a la tarea
+    await this.prisma.attachment.deleteMany({
+      where: { task_id: id }
+    });
+    
+    this.logger.log(`Relaciones de tarea ${id} eliminadas (comentarios y adjuntos)`);
+    
+    // Finalmente, eliminar la tarea
+    const deletedTask = await this.prisma.task.delete({
+      where: { id },
+    });
+    
+    this.logger.log(`Tarea ${id} eliminada correctamente`);
+    return deletedTask;
+  } catch (error) {
+    // Manejar posibles errores de restricciones de integridad
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2003') {
+        this.logger.error(`Error de integridad referencial al eliminar tarea ${id}:`, error);
+        throw new BadRequestException('No se puede eliminar la tarea porque tiene registros relacionados. Detalles: ' + error.message);
       }
-      throw error;
     }
+    
+    this.logger.error(`Error al eliminar tarea ${id}:`, error);
+    throw error;
   }
+}
 }
