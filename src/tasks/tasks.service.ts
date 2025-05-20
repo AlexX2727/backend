@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -10,6 +10,8 @@ import { Prisma } from '@prisma/client';
  */
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -213,6 +215,153 @@ export class TasksService {
   }
 
   /**
+   * Obtiene tareas con múltiples opciones de filtrado
+   * @param options - Opciones de filtrado (proyecto, asignado, etc.)
+   * @returns Lista de tareas filtradas
+   */
+  async findTasksWithFilters(options: {
+    projectId?: number;
+    assigneeId?: number;
+    myTasks?: boolean;
+    userId?: number;
+    status?: string;
+    priority?: string;
+  }) {
+    const { projectId, assigneeId, myTasks, userId, status, priority } = options;
+    
+    // Construir las condiciones del where
+    const where: Prisma.TaskWhereInput = {};
+    
+    // Filtrar por proyecto si se proporciona un projectId
+    if (projectId) {
+      where.project_id = projectId;
+    }
+    
+    // Filtrar por asignado si se proporciona un assigneeId
+    if (assigneeId) {
+      where.assignee_id = assigneeId;
+    }
+    
+    // Filtrar por "mis tareas" (tareas asignadas al usuario actual)
+    if (myTasks && userId) {
+      where.assignee_id = userId;
+    }
+    
+    // Filtrar por estado si se proporciona
+    if (status) {
+      where.status = status;
+    }
+    
+    // Filtrar por prioridad si se proporciona
+    if (priority) {
+      where.priority = priority;
+    }
+    
+    return this.prisma.task.findMany({
+      where,
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            username: true,
+            avatar: true,
+          }
+        },
+        _count: {
+          select: {
+            comments: true,
+            attachments: true,
+          }
+        }
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Obtiene los miembros del proyecto para poder asignar tareas
+   * @param projectId - ID del proyecto
+   * @returns Lista de miembros del proyecto, incluyendo el propietario
+   */
+  async getProjectMembers(projectId: number) {
+    // Verificar que el proyecto existe
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            username: true,
+            avatar: true,
+          }
+        }
+      }
+    });
+    
+    if (!project) {
+      throw new NotFoundException(`Proyecto con ID ${projectId} no encontrado`);
+    }
+    
+    // Obtener los miembros del proyecto
+    const members = await this.prisma.projectMember.findMany({
+      where: { project_id: projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            username: true,
+            avatar: true,
+          }
+        }
+      }
+    });
+    
+    // Combinar el propietario con los miembros
+    const ownerAsMember = {
+      id: project.owner.id,
+      firstName: project.owner.firstName,
+      lastName: project.owner.lastName,
+      email: project.owner.email,
+      username: project.owner.username,
+      avatar: project.owner.avatar,
+      role: 'Owner'
+    };
+    
+    const memberUsers = members.map(member => ({
+      id: member.user.id,
+      firstName: member.user.firstName,
+      lastName: member.user.lastName,
+      email: member.user.email,
+      username: member.user.username,
+      avatar: member.user.avatar,
+      role: member.role
+    }));
+    
+    // Asegurarse de que el propietario no se duplique
+    const uniqueMembers = [ownerAsMember, ...memberUsers.filter(m => m.id !== project.owner.id)];
+    
+    return uniqueMembers;
+  }
+
+  /**
    * Busca una tarea específica por su ID
    * @param id - ID de la tarea a buscar
    * @returns Información de la tarea solicitada
@@ -283,23 +432,41 @@ export class TasksService {
    * @returns La tarea con la información actualizada
    * @throws NotFoundException si la tarea no existe
    */
-  async update(id: number, updateTaskDto: UpdateTaskDto) {
+  // tasks.service.ts - método update modificado
+async update(id: number, updateTaskDto: UpdateTaskDto) {
+  try {
     // Verificar que la tarea existe
-    const task = await this.findOne(id);
+    const taskExists = await this.prisma.task.findUnique({
+      where: { id }
+    });
     
-    const { project_id, assignee_id, ...rest } = updateTaskDto;
+    if (!taskExists) {
+      throw new NotFoundException(`Tarea con ID ${id} no encontrada`);
+    }
     
-    try {
-      // Preparar el objeto de datos para la actualización
-      const data: any = { ...rest };
-      
-      // No permitimos cambiar el proyecto
-      if (project_id) {
-        throw new BadRequestException('No se puede cambiar el proyecto de una tarea existente');
+    // Log antes de procesar
+    this.logger.log(`Actualizando tarea ${id} - Datos recibidos: ${JSON.stringify(updateTaskDto)}`);
+    
+    // Extraer los campos de updateTaskDto
+    const { assignee_id, ...restData } = updateTaskDto;
+    
+    // Crear un objeto para actualización con todos los campos
+    const updateData: Prisma.TaskUpdateInput = {};
+    
+    // Procesar cada campo individualmente
+    Object.keys(restData).forEach(key => {
+      if (restData[key] !== undefined) {
+        updateData[key] = restData[key];
       }
-      
-      // Si se proporciona un nuevo asignado, verificar que existe
-      if (assignee_id) {
+    });
+    
+    // Manejar relación assignee de manera especial
+    if (assignee_id !== undefined) {
+      if (assignee_id === null) {
+        // Si es null, desconectar la relación
+        updateData.assignee = { disconnect: true };
+        this.logger.log(`Desconectando asignado de la tarea ${id}`);
+      } else {
         // Verificar que el usuario existe
         const userExists = await this.prisma.user.findUnique({
           where: { id: assignee_id }
@@ -309,71 +476,58 @@ export class TasksService {
           throw new BadRequestException(`Usuario con ID ${assignee_id} no encontrado`);
         }
         
-        // Verificar que el usuario es miembro del proyecto
-        const isMember = await this.prisma.projectMember.findFirst({
-          where: {
-            project_id: task.project_id,
-            user_id: assignee_id,
-          }
-        });
-        
-        // Obtener el proyecto para verificar el propietario
-        const project = await this.prisma.project.findUnique({
-          where: { id: task.project_id }
-        });
-        
-        // Verificar que el proyecto existe
-        if (!project) {
-          throw new BadRequestException(`Proyecto con ID ${task.project_id} no encontrado`);
-        }
-        
-        if (!isMember && assignee_id !== project.owner_id) {
-          throw new BadRequestException(`El usuario con ID ${assignee_id} no es miembro del proyecto`);
-        }
-        
-        data.assignee = {
-          connect: {
-            id: assignee_id,
-          },
+        // Conectar con el nuevo asignado
+        updateData.assignee = {
+          connect: { id: assignee_id }
         };
+        this.logger.log(`Conectando tarea ${id} con asignado ${assignee_id}`);
       }
-      
-      // Si se marca como completada y no hay fecha de completado, establecerla
-      if (data.status === 'Done' && !data.completedAt) {
-        data.completedAt = new Date();
-      }
-      
-      // Actualizar la tarea en la base de datos
-      return await this.prisma.task.update({
-        where: { id },
-        data,
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-            }
-          },
-          assignee: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              username: true,
-              avatar: true,
-            }
-          },
+    }
+    
+    // Si se marca como completada y no hay fecha de completado, establecerla
+    if (restData.status === 'Done' && !restData.completedAt) {
+      updateData.completedAt = new Date().toISOString().split('T')[0];
+    }
+    
+    // Log para depuración
+    this.logger.log(`Datos finales para actualización de tarea ${id}: ${JSON.stringify(updateData)}`);
+    
+    // Actualizar la tarea en la base de datos
+    const updatedTask = await this.prisma.task.update({
+      where: { id },
+      data: updateData,
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          }
         },
-      });
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
+        assignee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            username: true,
+            avatar: true,
+          }
+        },
+      },
+    });
+    
+    this.logger.log(`Tarea ${id} actualizada correctamente`);
+    return updatedTask;
+  } catch (error) {
+    this.logger.error(`Error al actualizar tarea ${id}: ${error.message}`, error.stack);
+    
+    if (error instanceof BadRequestException || error instanceof NotFoundException) {
       throw error;
     }
+    throw error;
   }
+}
 
   /**
    * Elimina una tarea de la base de datos
@@ -401,4 +555,3 @@ export class TasksService {
     }
   }
 }
-

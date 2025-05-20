@@ -1,9 +1,40 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateTaskDto } from './create-task.dto';
+// update-task.dto.ts en el backend
+import { IsOptional, IsString, IsInt, IsNumber } from 'class-validator';
 
-/**
- * DTO para actualización de tareas
- * Extiende de CreateTaskDto pero hace todos los campos opcionales
- */
-export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
+export class UpdateTaskDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
 
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  priority?: string;
+
+  @IsOptional()
+  @IsString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  estimatedHours?: number;
+
+  @IsOptional()
+  @IsString()
+  actualHours?: string;
+
+  @IsOptional()
+  @IsString()
+  completedAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  assignee_id?: number;
+}

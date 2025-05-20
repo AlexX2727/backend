@@ -16,14 +16,6 @@ import {
  */
 export class CreateTaskDto {
   @IsNotEmpty()
-  @IsInt()
-  project_id: number;
-
-  @IsOptional()
-  @IsInt()
-  assignee_id?: number;
-
-  @IsNotEmpty()
   @IsString()
   title: string;
 
@@ -42,8 +34,8 @@ export class CreateTaskDto {
   priority?: string = 'Medium';
 
   @IsOptional()
-  @IsDateString()
-  dueDate?: Date;
+  @IsString()
+  dueDate?: string; // Cambiado a string
 
   @IsOptional()
   @IsNumber()
@@ -52,13 +44,19 @@ export class CreateTaskDto {
   estimatedHours?: number;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(1000)
-  actualHours?: number;
+  @IsString()
+  actualHours?: string; // Cambiado a string
 
   @IsOptional()
-  @IsDateString()
-  completedAt?: Date;
+  @IsString()
+  completedAt?: string; // Cambiado a string
+
+  @IsNotEmpty()
+  @IsInt()
+  project_id: number;
+
+  @IsOptional()
+  @IsInt()
+  assignee_id?: number;
 }
 

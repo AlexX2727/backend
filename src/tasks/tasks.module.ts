@@ -14,4 +14,3 @@ import { PrismaModule } from 'src/prisma/prisma.module';
   exports: [TasksService],
 })
 export class TasksModule {}
-
