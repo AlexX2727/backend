@@ -10,6 +10,7 @@ import { ProjectMembersModule } from './project-members/project-members.module';
 import { TasksModule } from './tasks/tasks.module';
 import { CommentsModule } from './comments/comments.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
     TasksModule,
     CommentsModule,
     AttachmentsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

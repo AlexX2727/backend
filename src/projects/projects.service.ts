@@ -249,22 +249,12 @@ export class ProjectsService {
    * @throws NotFoundException si el proyecto no existe
    */
   async remove(id: number) {
-    // Verificar que el proyecto existe antes de eliminarlo
-    await this.findOne(id);
-    
     try {
-      // Eliminar el proyecto de la base de datos
       return await this.prisma.project.delete({
         where: { id },
       });
     } catch (error) {
-      // Manejar posibles errores de restricciones de integridad
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2003') {
-          throw new BadRequestException('No se puede eliminar el proyecto porque tiene registros relacionados');
-        }
-      }
-      throw error;
+      throw new BadRequestException(`No se puede eliminar el proyecto porque tiene registros relacionados`);
     }
   }
 }

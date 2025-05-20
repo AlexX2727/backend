@@ -48,54 +48,54 @@ model User {
 }
 
 model Project {
-  id          Int      @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   owner_id    Int
-  owner       User     @relation(fields: [owner_id], references: [id])
+  owner       User             @relation(fields: [owner_id], references: [id])
   name        String
   description String?
-  status      String   @default("Active")
+  status      String           @default("Active")
   startDate   String?  
   endDate     String?  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   // Relaciones
-  members     ProjectMember[]
-  tasks       Task[]
+  members     ProjectMember[]  // Sin `onDelete` aquí
+  tasks       Task[]           // Sin `onDelete` aquí
 }
 
 model ProjectMember {
-  id              Int       @id @default(autoincrement())
-  project_id      Int
-  project         Project   @relation(fields: [project_id], references: [id])
-  user_id         Int
-  user            User      @relation(fields: [user_id], references: [id])
-  role            String    @default("Member")
-  joinedAt        DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id         Int      @id @default(autoincrement())
+  project_id Int
+  project    Project  @relation(fields: [project_id], references: [id], onDelete: Cascade) // `onDelete` aquí
+  user_id    Int
+  user       User     @relation(fields: [user_id], references: [id])
+  role       String   @default("Member")
+  joinedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
 
   @@unique([project_id, user_id])
 }
 
 model Task {
-  id              Int         @id @default(autoincrement())
-  project_id      Int
-  project         Project     @relation(fields: [project_id], references: [id])
-  assignee_id     Int?
-  assignee        User?       @relation(fields: [assignee_id], references: [id])
-  title           String
-  description     String?
-  status          String      @default("Todo")
-  priority        String      @default("Medium")
-  dueDate         DateTime?
-  estimatedHours  Float?
-  actualHours     Float?
-  completedAt     DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
-  // Relations
+  id         Int      @id @default(autoincrement())
+  project_id Int
+  project    Project  @relation(fields: [project_id], references: [id], onDelete: Cascade) // `onDelete` aquí
+  assignee_id Int?
+  assignee   User?    @relation(fields: [assignee_id], references: [id])
+  title      String
+  description String?
+  status     String   @default("Todo")
+  priority   String   @default("Medium")
+  dueDate    String?  // Cambiado de DateTime a String
+  estimatedHours Float?
+  actualHours String?  // Cambiado de Float a String
+  completedAt String?  // Cambiado de DateTime a String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relaciones
   comments        Comment[]
   attachments     Attachment[]
 }
