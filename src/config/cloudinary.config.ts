@@ -1,3 +1,4 @@
+// cloudinary.service.ts
 import { v2 as cloudinary } from 'cloudinary';
 import { ConfigOptions } from 'cloudinary';
 import { Injectable, Provider, Module } from '@nestjs/common';
@@ -25,13 +26,32 @@ export const CloudinaryProvider: Provider = {
 export class CloudinaryService {
   constructor() {}
 
-  async uploadImage(file: Express.Multer.File): Promise<any> {
+  /**
+   * Upload a file to Cloudinary
+   * @param file - The file to upload
+   * @param options - Upload options
+   * @returns Promise with upload result
+   */
+  async uploadFile(
+    file: Express.Multer.File,
+    options: {
+      folder?: string;
+      resourceType?: 'image' | 'video' | 'raw' | 'auto';
+      publicId?: string;
+      tags?: string[];
+    } = {},
+  ): Promise<any> {
+    // Default options
+    const uploadOptions = {
+      folder: options.folder || 'uploads',
+      resource_type: options.resourceType || 'auto',
+      public_id: options.publicId,
+      tags: options.tags,
+    };
+
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'avatars',
-          resource_type: 'auto',
-        },
+        uploadOptions,
         (error, result) => {
           if (error) return reject(error);
           resolve(result);
@@ -50,6 +70,43 @@ export class CloudinaryService {
       readableInstance.pipe(uploadStream);
     });
   }
+
+  /**
+   * Upload an image to Cloudinary (maintained for backward compatibility)
+   * @param file - The image file to upload
+   * @returns Promise with upload result
+   */
+  async uploadImage(file: Express.Multer.File): Promise<any> {
+    return this.uploadFile(file, { folder: 'avatars', resourceType: 'image' });
+  }
+
+  /**
+   * Upload a task attachment to Cloudinary
+   * @param file - The attachment file to upload
+   * @param taskId - The ID of the task this attachment belongs to
+   * @returns Promise with upload result
+   */
+  async uploadTaskAttachment(file: Express.Multer.File, taskId: number): Promise<any> {
+    return this.uploadFile(file, {
+      folder: `task_attachments/${taskId}`,
+      resourceType: 'auto',
+      tags: [`task_${taskId}`, 'attachment'],
+    });
+  }
+
+  /**
+   * Delete a file from Cloudinary
+   * @param publicId - The public ID of the file to delete
+   * @returns Promise with deletion result
+   */
+  async deleteFile(publicId: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader.destroy(publicId, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      });
+    });
+  }
 }
 
 // Cloudinary module configuration
@@ -58,4 +115,3 @@ export class CloudinaryService {
   exports: [CloudinaryProvider, CloudinaryService],
 })
 export class CloudinaryModule {}
-

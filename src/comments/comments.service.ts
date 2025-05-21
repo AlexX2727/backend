@@ -250,77 +250,77 @@ export class CommentsService {
    */
 
   /**
-   * Crea un nuevo archivo adjunto para una tarea
-   * @param createAttachmentDto - Datos del archivo adjunto a crear
-   * @returns El archivo adjunto creado con información del usuario y la tarea
-   */
-  async createAttachment(createAttachmentDto: CreateAttachmentDto) {
-    const { task_id, user_id, filename, originalName, path, mimeType, size } = createAttachmentDto;
+ * Crea un nuevo archivo adjunto para una tarea utilizando los datos proporcionados
+ * @param createAttachmentDto Datos del archivo adjunto a crear
+ * @returns El archivo adjunto creado
+ */
+async createAttachment(createAttachmentDto: CreateAttachmentDto) {
+  const { task_id, user_id, filename, originalName, path, mimeType, size } = createAttachmentDto;
+  
+  try {
+    // Verificar que la tarea existe
+    const taskExists = await this.prisma.task.findUnique({
+      where: { id: task_id }
+    });
     
-    try {
-      // Verificar que la tarea existe
-      const taskExists = await this.prisma.task.findUnique({
-        where: { id: task_id }
-      });
-      
-      if (!taskExists) {
-        throw new BadRequestException(`Tarea con ID ${task_id} no encontrada`);
-      }
-      
-      // Verificar que el usuario existe
-      const userExists = await this.prisma.user.findUnique({
-        where: { id: user_id }
-      });
-      
-      if (!userExists) {
-        throw new BadRequestException(`Usuario con ID ${user_id} no encontrado`);
-      }
-      
-      // Crear el archivo adjunto
-      return await this.prisma.attachment.create({
-        data: {
-          filename,
-          originalName,
-          path,
-          mimeType,
-          size,
-          task: {
-            connect: {
-              id: task_id,
-            },
-          },
-          user: {
-            connect: {
-              id: user_id,
-            },
+    if (!taskExists) {
+      throw new BadRequestException(`Tarea con ID ${task_id} no encontrada`);
+    }
+    
+    // Verificar que el usuario existe
+    const userExists = await this.prisma.user.findUnique({
+      where: { id: user_id }
+    });
+    
+    if (!userExists) {
+      throw new BadRequestException(`Usuario con ID ${user_id} no encontrado`);
+    }
+    
+    // Crear el archivo adjunto
+    return await this.prisma.attachment.create({
+      data: {
+        filename,
+        originalName,
+        path,
+        mimeType,
+        size,
+        task: {
+          connect: {
+            id: task_id,
           },
         },
-        include: {
-          task: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-            }
-          },
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              username: true,
-              avatar: true,
-            }
+        user: {
+          connect: {
+            id: user_id,
           },
         },
-      });
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
+      },
+      include: {
+        task: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+          }
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            avatar: true,
+          }
+        },
+      },
+    });
+  } catch (error) {
+    if (error instanceof BadRequestException) {
       throw error;
     }
+    throw error;
   }
+}
 
   /**
    * Obtiene todos los archivos adjuntos registrados

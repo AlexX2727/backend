@@ -11,6 +11,8 @@ import { TasksModule } from './tasks/tasks.module';
 import { CommentsModule } from './comments/comments.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { CloudinaryModule } from './config/cloudinary.config';
+import { UploadModule } from './config/upload.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     CommentsModule,
     AttachmentsModule,
     DashboardModule,
+    CloudinaryModule, // Add Cloudinary module
+    UploadModule, // Add Upload module
   ],
   controllers: [AppController],
   providers: [AppService],
