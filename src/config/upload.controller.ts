@@ -53,29 +53,33 @@ export class UploadController {
    * @param taskId - ID de la tarea
    * @returns La información del archivo subido
    */
-  @UseGuards(AuthGuard)
-  @Post('task/:taskId')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadTaskAttachment(
-    @UploadedFile() file: Express.Multer.File,
-    @Param('taskId', ParseIntPipe) taskId: number,
-  ) {
-    if (!file) {
-      throw new BadRequestException('No se ha proporcionado ningún archivo');
-    }
 
-    try {
-      const result = await this.cloudinaryService.uploadTaskAttachment(file, taskId);
-      
-      return {
-        filename: result.public_id,
-        originalName: file.originalname,
-        path: result.secure_url,
-        mimeType: file.mimetype,
-        size: file.size,
-      };
-    } catch (error) {
-      throw new BadRequestException(`Error al subir el archivo adjunto: ${error.message}`);
-    }
+@UseGuards(AuthGuard)
+@Post('task/:taskId')
+@UseInterceptors(FileInterceptor('file'))
+async uploadTaskAttachment(
+  @UploadedFile() file: Express.Multer.File,
+  @Param('taskId', ParseIntPipe) taskId: number,
+) {
+  if (!file) {
+    throw new BadRequestException('No se ha proporcionado ningún archivo');
   }
+
+  try {
+    // Limpiar el nombre del archivo para evitar problemas
+    const originalName = file.originalname.replace(/[^\w\s.-]/g, '');
+    
+    const result = await this.cloudinaryService.uploadTaskAttachment(file, taskId);
+    
+    return {
+      filename: result.public_id,
+      originalName: originalName, // Usar el nombre limpio
+      path: result.secure_url,
+      mimeType: file.mimetype,
+      size: file.size,
+    };
+  } catch (error) {
+    throw new BadRequestException(`Error al subir el archivo adjunto: ${error.message}`);
+  }
+}
 }
