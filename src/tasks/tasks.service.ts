@@ -573,4 +573,72 @@ async remove(id: number) {
     throw error;
   }
 }
+/**
+ * Obtiene todas las tareas relacionadas con un usuario específico
+ * Incluye tareas de proyectos donde el usuario es propietario o miembro
+ * @param userId - ID del usuario autenticado
+ * @returns Lista de tareas relacionadas con el usuario
+ */
+async findUserRelatedTasks(userId: number) {
+  // Primero, obtener todos los proyectos donde el usuario es propietario o miembro
+  const userProjects = await this.prisma.project.findMany({
+    where: {
+      OR: [
+        { owner_id: userId }, // Proyectos propios
+        { 
+          members: {
+            some: {
+              user_id: userId // Proyectos donde es miembro
+            }
+          }
+        }
+      ]
+    },
+    select: { id: true }
+  });
+
+  const projectIds = userProjects.map(project => project.id);
+
+  // Si no tiene proyectos, devolver array vacío
+  if (projectIds.length === 0) {
+    return [];
+  }
+
+  // Obtener todas las tareas de esos proyectos
+  return this.prisma.task.findMany({
+    where: {
+      project_id: {
+        in: projectIds
+      }
+    },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+        }
+      },
+      assignee: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          username: true,
+          avatar: true,
+        }
+      },
+      _count: {
+        select: {
+          comments: true,
+          attachments: true,
+        }
+      }
+    },
+    orderBy: {
+      updatedAt: 'desc',
+    },
+  });
+}
 }

@@ -5,7 +5,6 @@ import { Prisma } from '@prisma/client';
 /**
  * Interfaz para los datos de proyectos activos en el dashboard
  */
-// Updated interface definitions to accept null values
 export interface ActiveProjectsMetric {
   count: number;
   projects: {
@@ -32,7 +31,7 @@ export interface PendingTasksMetric {
     title: string;
     status: string;
     priority: string;
-    dueDate?: string | null; // Cambiado a string | null
+    dueDate?: string | null;
     project: {
       id: number;
       name: string;
@@ -52,7 +51,7 @@ export interface CompletedTasksMetric {
   tasks: {
     id: number;
     title: string;
-    completedAt?: string | null; // Cambiado a string | null
+    completedAt?: string | null;
     project: {
       id: number;
       name: string;
@@ -122,9 +121,6 @@ export interface RecentActivityMetric {
   )[];
 }
 
-/**
- * Interfaz para los datos de colaboradores por tarea en el dashboard
- */
 export interface TaskCollaboratorsMetric {
   tasks: {
     id: number;
@@ -137,10 +133,6 @@ export interface TaskCollaboratorsMetric {
   }[];
 }
 
-
-/**
- * Interfaz para todos los datos combinados del dashboard
- */
 export interface DashboardMetrics {
   activeProjects: ActiveProjectsMetric;
   pendingTasks: PendingTasksMetric;
@@ -153,23 +145,35 @@ export interface DashboardMetrics {
 /**
  * Servicio para la obtención de métricas para el dashboard
  * Proporciona métodos para consultar diferentes aspectos del sistema
- * como proyectos activos, tareas pendientes, etc.
+ * filtrados por usuario autenticado
  */
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Obtiene el conteo y lista de proyectos activos
+   * Obtiene el conteo y lista de proyectos activos del usuario
+   * Solo muestra proyectos donde el usuario es owner o miembro
+   * @param userId ID del usuario autenticado
    * @param limit Límite opcional de resultados (por defecto 5)
-   * @returns Información sobre proyectos activos
+   * @returns Información sobre proyectos activos del usuario
    */
-  async getActiveProjects(limit = 5): Promise<ActiveProjectsMetric> {
+  async getActiveProjects(userId: number, limit = 5): Promise<ActiveProjectsMetric> {
     try {
-      // Obtener el conteo total de proyectos activos
+      // Obtener el conteo total de proyectos activos donde el usuario participa
       const count = await this.prisma.project.count({
         where: {
           status: 'Active',
+          OR: [
+            { owner_id: userId }, // Proyectos donde es owner
+            { 
+              members: {
+                some: {
+                  user_id: userId // Proyectos donde es miembro
+                }
+              }
+            }
+          ]
         },
       });
 
@@ -177,6 +181,16 @@ export class DashboardService {
       const projects = await this.prisma.project.findMany({
         where: {
           status: 'Active',
+          OR: [
+            { owner_id: userId },
+            { 
+              members: {
+                some: {
+                  user_id: userId
+                }
+              }
+            }
+          ]
         },
         take: limit,
         orderBy: {
@@ -201,7 +215,6 @@ export class DashboardService {
         },
       });
 
-      // Transformar los resultados al formato requerido
       return {
         count,
         projects: projects.map((project) => ({
@@ -231,18 +244,37 @@ export class DashboardService {
   }
 
   /**
-   * Obtiene el conteo y lista de tareas pendientes
+   * Obtiene el conteo y lista de tareas pendientes del usuario
+   * Solo muestra tareas asignadas al usuario o en proyectos donde participa
+   * @param userId ID del usuario autenticado
    * @param limit Límite opcional de resultados (por defecto 10)
-   * @returns Información sobre tareas pendientes
+   * @returns Información sobre tareas pendientes del usuario
    */
-  async getPendingTasks(limit = 10): Promise<PendingTasksMetric> {
+  async getPendingTasks(userId: number, limit = 10): Promise<PendingTasksMetric> {
     try {
-      // Obtener el conteo total de tareas pendientes
+      // Obtener el conteo total de tareas pendientes del usuario
       const count = await this.prisma.task.count({
         where: {
           status: {
             not: 'Done',
           },
+          OR: [
+            { assignee_id: userId }, // Tareas asignadas al usuario
+            { 
+              project: {
+                OR: [
+                  { owner_id: userId }, // Tareas en proyectos donde es owner
+                  { 
+                    members: {
+                      some: {
+                        user_id: userId // Tareas en proyectos donde es miembro
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         },
       });
 
@@ -252,14 +284,31 @@ export class DashboardService {
           status: {
             not: 'Done',
           },
+          OR: [
+            { assignee_id: userId },
+            { 
+              project: {
+                OR: [
+                  { owner_id: userId },
+                  { 
+                    members: {
+                      some: {
+                        user_id: userId
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         },
         take: limit,
         orderBy: [
           {
-            priority: 'desc', // Prioridad alta primero
+            priority: 'desc',
           },
           {
-            dueDate: 'asc', // Fecha de vencimiento más cercana primero
+            dueDate: 'asc',
           },
         ],
         include: {
@@ -281,7 +330,6 @@ export class DashboardService {
         },
       });
 
-      // Transformar los resultados al formato requerido
       return {
         count,
         tasks: tasks.map((task) => ({
@@ -312,16 +360,34 @@ export class DashboardService {
   }
 
   /**
-   * Obtiene el conteo y lista de tareas completadas
+   * Obtiene el conteo y lista de tareas completadas del usuario
+   * @param userId ID del usuario autenticado
    * @param limit Límite opcional de resultados (por defecto 5)
-   * @returns Información sobre tareas completadas
+   * @returns Información sobre tareas completadas del usuario
    */
-  async getCompletedTasks(limit = 5): Promise<CompletedTasksMetric> {
+  async getCompletedTasks(userId: number, limit = 5): Promise<CompletedTasksMetric> {
     try {
-      // Obtener el conteo total de tareas completadas
+      // Obtener el conteo total de tareas completadas del usuario
       const count = await this.prisma.task.count({
         where: {
           status: 'Done',
+          OR: [
+            { assignee_id: userId },
+            { 
+              project: {
+                OR: [
+                  { owner_id: userId },
+                  { 
+                    members: {
+                      some: {
+                        user_id: userId
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         },
       });
 
@@ -329,10 +395,27 @@ export class DashboardService {
       const tasks = await this.prisma.task.findMany({
         where: {
           status: 'Done',
+          OR: [
+            { assignee_id: userId },
+            { 
+              project: {
+                OR: [
+                  { owner_id: userId },
+                  { 
+                    members: {
+                      some: {
+                        user_id: userId
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         },
         take: limit,
         orderBy: {
-          completedAt: 'desc', // Completadas más recientemente primero
+          completedAt: 'desc',
         },
         include: {
           project: {
@@ -353,7 +436,6 @@ export class DashboardService {
         },
       });
 
-      // Transformar los resultados al formato requerido
       return {
         count,
         tasks: tasks.map((task) => ({
@@ -382,20 +464,34 @@ export class DashboardService {
   }
 
   /**
-   * Obtiene información sobre los colaboradores asignados a tareas
-   * Calcula cuántos colaboradores están trabajando en cada tarea
+   * Obtiene información sobre los colaboradores en tareas del usuario
+   * @param userId ID del usuario autenticado
    * @param limit Límite opcional de resultados (por defecto 10)
-   * @returns Información sobre colaboradores por tarea
+   * @returns Información sobre colaboradores por tarea del usuario
    */
-  async getTaskCollaboratorsCount(limit = 10): Promise<TaskCollaboratorsMetric> {
+  async getTaskCollaboratorsCount(userId: number, limit = 10): Promise<TaskCollaboratorsMetric> {
     try {
-      // Obtener tareas con información de proyecto y asignaciones
+      // Obtener tareas del usuario con información de proyecto y asignaciones
       const tasks = await this.prisma.task.findMany({
         take: limit,
         where: {
-          assignee_id: {
-            not: null,
-          },
+          OR: [
+            { assignee_id: userId },
+            { 
+              project: {
+                OR: [
+                  { owner_id: userId },
+                  { 
+                    members: {
+                      some: {
+                        user_id: userId
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         },
         include: {
           project: {
@@ -417,20 +513,12 @@ export class DashboardService {
         },
       });
 
-      // Transformar los resultados al formato requerido
       return {
         tasks: tasks.map((task) => {
-          // Obtener los IDs únicos de usuarios que han comentado en la tarea
           const commentUserIds = new Set(task.comments.map((comment) => comment.user_id));
-          
-          // Obtener los IDs de miembros del proyecto
           const projectMemberIds = new Set(task.project.members.map(member => member.user_id));
           
-          // Contar colaboradores únicos (miembros del proyecto que han comentado 
-          // y usuarios externos que han comentado)
-          // Primero contamos los miembros del proyecto
           const collaboratorCount = projectMemberIds.size + 
-            // Luego sumamos usuarios que han comentado pero no son miembros del proyecto
             [...commentUserIds].filter(userId => !projectMemberIds.has(userId)).length;
 
           return {
@@ -451,17 +539,30 @@ export class DashboardService {
   }
 
   /**
-   * Obtiene los proyectos más recientes creados en el sistema
+   * Obtiene los proyectos más recientes del usuario
+   * @param userId ID del usuario autenticado
    * @param limit Límite opcional de resultados (por defecto 5)
-   * @returns Información sobre proyectos recientes
+   * @returns Información sobre proyectos recientes del usuario
    */
-  async getRecentProjects(limit = 5): Promise<RecentProjectsMetric> {
+  async getRecentProjects(userId: number, limit = 5): Promise<RecentProjectsMetric> {
     try {
-      // Obtener los proyectos más recientes
+      // Obtener los proyectos más recientes del usuario
       const projects = await this.prisma.project.findMany({
+        where: {
+          OR: [
+            { owner_id: userId },
+            { 
+              members: {
+                some: {
+                  user_id: userId
+                }
+              }
+            }
+          ]
+        },
         take: limit,
         orderBy: {
-          createdAt: 'desc', // Más recientes primero
+          createdAt: 'desc',
         },
         include: {
           owner: {
@@ -476,7 +577,6 @@ export class DashboardService {
         },
       });
 
-      // Transformar los resultados al formato requerido
       return {
         projects: projects.map((project) => ({
           id: project.id,
@@ -500,15 +600,34 @@ export class DashboardService {
   }
 
   /**
-   * Obtiene la actividad reciente en el sistema
-   * Incluye tareas creadas o actualizadas, comentarios y adjuntos
+   * Obtiene la actividad reciente relacionada con el usuario
+   * @param userId ID del usuario autenticado
    * @param limit Límite opcional de resultados (por defecto 10)
-   * @returns Información sobre actividad reciente
+   * @returns Información sobre actividad reciente del usuario
    */
-  async getRecentActivity(limit = 10): Promise<RecentActivityMetric> {
+  async getRecentActivity(userId: number, limit = 10): Promise<RecentActivityMetric> {
     try {
-      // Obtener tareas recientemente creadas o actualizadas
+      // Obtener tareas recientemente creadas o actualizadas en proyectos del usuario
       const recentTasks = await this.prisma.task.findMany({
+        where: {
+          OR: [
+            { assignee_id: userId },
+            { 
+              project: {
+                OR: [
+                  { owner_id: userId },
+                  { 
+                    members: {
+                      some: {
+                        user_id: userId
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
         take: limit,
         orderBy: {
           updatedAt: 'desc',
@@ -532,8 +651,29 @@ export class DashboardService {
         },
       });
 
-      // Obtener comentarios recientes
+      // Obtener comentarios recientes en tareas de proyectos del usuario
       const recentComments = await this.prisma.comment.findMany({
+        where: {
+          task: {
+            OR: [
+              { assignee_id: userId },
+              { 
+                project: {
+                  OR: [
+                    { owner_id: userId },
+                    { 
+                      members: {
+                        some: {
+                          user_id: userId
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
         take: limit,
         orderBy: {
           createdAt: 'desc',
@@ -563,8 +703,29 @@ export class DashboardService {
         },
       });
 
-      // Obtener adjuntos recientes
+      // Obtener adjuntos recientes en tareas de proyectos del usuario
       const recentAttachments = await this.prisma.attachment.findMany({
+        where: {
+          task: {
+            OR: [
+              { assignee_id: userId },
+              { 
+                project: {
+                  OR: [
+                    { owner_id: userId },
+                    { 
+                      members: {
+                        some: {
+                          user_id: userId
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
         take: limit,
         orderBy: {
           createdAt: 'desc',
@@ -656,10 +817,11 @@ export class DashboardService {
   }
 
   /**
-   * Obtiene todas las métricas del dashboard en una sola llamada
-   * @returns Objeto con todas las métricas del dashboard
+   * Obtiene todas las métricas del dashboard filtradas por usuario
+   * @param userId ID del usuario autenticado
+   * @returns Objeto con todas las métricas del dashboard del usuario
    */
-  async getDashboardMetrics(): Promise<DashboardMetrics> {
+  async getDashboardMetrics(userId: number): Promise<DashboardMetrics> {
     try {
       // Obtener todas las métricas en paralelo para mejorar el rendimiento
       const [
@@ -670,15 +832,14 @@ export class DashboardService {
         recentProjects,
         recentActivity
       ] = await Promise.all([
-        this.getActiveProjects(),
-        this.getPendingTasks(),
-        this.getCompletedTasks(),
-        this.getTaskCollaboratorsCount(),
-        this.getRecentProjects(),
-        this.getRecentActivity()
+        this.getActiveProjects(userId),
+        this.getPendingTasks(userId),
+        this.getCompletedTasks(userId),
+        this.getTaskCollaboratorsCount(userId),
+        this.getRecentProjects(userId),
+        this.getRecentActivity(userId)
       ]);
 
-      // Combinar todas las métricas en un solo objeto
       return {
         activeProjects,
         pendingTasks,

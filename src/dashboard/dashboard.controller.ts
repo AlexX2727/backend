@@ -1,5 +1,7 @@
-import { Controller, Get, Query, ParseIntPipe, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, ParseIntPipe, HttpException, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
+import { AuthGuard } from '../auth/auth.guard'; // Usando tu AuthGuard
+import { Request } from 'express';
 import { 
   ActiveProjectsMetric, 
   PendingTasksMetric, 
@@ -10,22 +12,43 @@ import {
   DashboardMetrics
 } from './dashboard.service';
 
+// Interfaz para el usuario en el request basada en tu AuthService
+interface AuthenticatedRequest extends Request {
+  user: {
+    userWithoutPassword: {
+      id: number;
+      email: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      avatar?: string;
+      phone?: string;
+      role_id: number;
+      createdAt: Date;
+      updatedAt: Date;
+    };
+  };
+}
+
 /**
  * Controlador para gestionar las solicitudes relacionadas con el dashboard
- * Expone endpoints para obtener métricas y estadísticas del sistema
+ * Expone endpoints para obtener métricas y estadísticas del sistema filtradas por usuario
  */
 @Controller('dashboard')
+@UseGuards(AuthGuard) // Usando tu AuthGuard
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   /**
-   * Obtiene todas las métricas del dashboard en una sola respuesta
-   * @returns Todas las métricas combinadas
+   * Obtiene todas las métricas del dashboard filtradas por el usuario logueado
+   * @param req Request con información del usuario autenticado
+   * @returns Todas las métricas combinadas del usuario
    */
   @Get()
-  async getAllMetrics(): Promise<DashboardMetrics> {
+  async getAllMetrics(@Req() req: AuthenticatedRequest): Promise<DashboardMetrics> {
     try {
-      return await this.dashboardService.getDashboardMetrics();
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getDashboardMetrics(userId);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener métricas del dashboard',
@@ -35,16 +58,19 @@ export class DashboardController {
   }
 
   /**
-   * Obtiene información sobre proyectos activos
+   * Obtiene información sobre proyectos activos del usuario
+   * @param req Request con información del usuario autenticado
    * @param limit Número máximo de proyectos a retornar
-   * @returns Métricas de proyectos activos
+   * @returns Métricas de proyectos activos del usuario
    */
   @Get('active-projects')
   async getActiveProjects(
+    @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<ActiveProjectsMetric> {
     try {
-      return await this.dashboardService.getActiveProjects(limit);
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getActiveProjects(userId, limit);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener proyectos activos',
@@ -54,16 +80,19 @@ export class DashboardController {
   }
 
   /**
-   * Obtiene información sobre tareas pendientes
+   * Obtiene información sobre tareas pendientes del usuario
+   * @param req Request con información del usuario autenticado
    * @param limit Número máximo de tareas a retornar
-   * @returns Métricas de tareas pendientes
+   * @returns Métricas de tareas pendientes del usuario
    */
   @Get('pending-tasks')
   async getPendingTasks(
+    @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<PendingTasksMetric> {
     try {
-      return await this.dashboardService.getPendingTasks(limit);
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getPendingTasks(userId, limit);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener tareas pendientes',
@@ -73,16 +102,19 @@ export class DashboardController {
   }
 
   /**
-   * Obtiene información sobre tareas completadas
+   * Obtiene información sobre tareas completadas del usuario
+   * @param req Request con información del usuario autenticado
    * @param limit Número máximo de tareas a retornar
-   * @returns Métricas de tareas completadas
+   * @returns Métricas de tareas completadas del usuario
    */
   @Get('completed-tasks')
   async getCompletedTasks(
+    @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<CompletedTasksMetric> {
     try {
-      return await this.dashboardService.getCompletedTasks(limit);
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getCompletedTasks(userId, limit);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener tareas completadas',
@@ -92,16 +124,19 @@ export class DashboardController {
   }
 
   /**
-   * Obtiene información sobre colaboradores por tarea
+   * Obtiene información sobre colaboradores por tarea del usuario
+   * @param req Request con información del usuario autenticado
    * @param limit Número máximo de tareas a analizar
-   * @returns Métricas de colaboradores por tarea
+   * @returns Métricas de colaboradores por tarea del usuario
    */
   @Get('task-collaborators')
   async getTaskCollaborators(
+    @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<TaskCollaboratorsMetric> {
     try {
-      return await this.dashboardService.getTaskCollaboratorsCount(limit);
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getTaskCollaboratorsCount(userId, limit);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener datos de colaboradores por tarea',
@@ -111,16 +146,19 @@ export class DashboardController {
   }
 
   /**
-   * Obtiene información sobre proyectos recientes
+   * Obtiene información sobre proyectos recientes del usuario
+   * @param req Request con información del usuario autenticado
    * @param limit Número máximo de proyectos a retornar
-   * @returns Métricas de proyectos recientes
+   * @returns Métricas de proyectos recientes del usuario
    */
   @Get('recent-projects')
   async getRecentProjects(
+    @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<RecentProjectsMetric> {
     try {
-      return await this.dashboardService.getRecentProjects(limit);
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getRecentProjects(userId, limit);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener proyectos recientes',
@@ -130,16 +168,19 @@ export class DashboardController {
   }
 
   /**
-   * Obtiene información sobre actividad reciente en el sistema
+   * Obtiene información sobre actividad reciente del usuario
+   * @param req Request con información del usuario autenticado
    * @param limit Número máximo de actividades a retornar
-   * @returns Métricas de actividad reciente
+   * @returns Métricas de actividad reciente del usuario
    */
   @Get('recent-activity')
   async getRecentActivity(
+    @Req() req: AuthenticatedRequest,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<RecentActivityMetric> {
     try {
-      return await this.dashboardService.getRecentActivity(limit);
+      const userId = req.user.userWithoutPassword.id;
+      return await this.dashboardService.getRecentActivity(userId, limit);
     } catch (error) {
       throw new HttpException(
         error.message || 'Error al obtener actividad reciente',
@@ -148,4 +189,3 @@ export class DashboardController {
     }
   }
 }
-

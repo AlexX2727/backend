@@ -54,11 +54,13 @@ export class TasksController {
    * Requiere autenticación
    * @returns Lista de todas las tareas registradas
    */
-  @UseGuards(AuthGuard)
-  @Get()
-  findAll() {
-    return this.tasksService.findAll();
-  }
+@UseGuards(AuthGuard)
+@Get()
+findAll(@Req() request: any) {
+  const userId = request.user?.userWithoutPassword?.id; // ⚠️ Ajustar según tu estructura JWT
+  this.logger.log(`Obteniendo tareas para usuario: ${userId}`);
+  return this.tasksService.findUserRelatedTasks(userId);
+}
 
   /**
    * Endpoint para listar tareas con múltiples opciones de filtrado
