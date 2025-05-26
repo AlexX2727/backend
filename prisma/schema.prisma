@@ -45,6 +45,7 @@ model User {
   assignedTasks     Task[]
   comments          Comment[]
   attachments       Attachment[]
+  verificationCodes VerificationCode[]
 }
 
 model Project {
@@ -124,4 +125,14 @@ model Attachment {
   size            Int
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+model VerificationCode {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // Código de verificación (ej. "X7K9P2")
+  userId    Int      // Relación con el usuario
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime // Fecha de expiración (ej. 15 minutos después de creado)
+  isUsed    Boolean  @default(false) // Para marcar si ya se usó
 }

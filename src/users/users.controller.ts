@@ -25,6 +25,8 @@ import { Express } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { CloudinaryService } from 'src/config/cloudinary.config';
 import { User } from 'src/auth/user.decorator';
@@ -134,5 +136,25 @@ export class UsersController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.remove(id);
+  }
+
+  /**
+   * Endpoint para solicitar recuperación de contraseña
+   * Recibe un email y envía un correo con instrucciones si el usuario existe
+   */
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.usersService.forgotPassword(forgotPasswordDto);
+  }
+
+  /**
+   * Endpoint para restablecer la contraseña con un token válido
+   * Recibe un token y la nueva contraseña, y actualiza la contraseña si el token es válido
+   */
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.usersService.resetPassword(resetPasswordDto);
   }
 }
