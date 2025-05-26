@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Get, HttpException, HttpStatus, Injectable, Query, Req } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -140,8 +140,18 @@ export interface DashboardMetrics {
   taskCollaborators: TaskCollaboratorsMetric;
   recentProjects: RecentProjectsMetric;
   recentActivity: RecentActivityMetric;
+  projectProgress: ProjectProgressMetric; // ⬅️ Agregar esta línea
 }
-
+export interface ProjectProgressMetric {
+  projects: {
+    id: number;
+    name: string;
+    totalTasks: number;
+    completedTasks: number;
+    progressPercentage: number;
+    status: string;
+  }[];
+}
 /**
  * Servicio para la obtención de métricas para el dashboard
  * Proporciona métodos para consultar diferentes aspectos del sistema
@@ -822,41 +832,109 @@ export class DashboardService {
    * @returns Objeto con todas las métricas del dashboard del usuario
    */
   async getDashboardMetrics(userId: number): Promise<DashboardMetrics> {
-    try {
-      // Obtener todas las métricas en paralelo para mejorar el rendimiento
-      const [
-        activeProjects,
-        pendingTasks,
-        completedTasks,
-        taskCollaborators,
-        recentProjects,
-        recentActivity
-      ] = await Promise.all([
-        this.getActiveProjects(userId),
-        this.getPendingTasks(userId),
-        this.getCompletedTasks(userId),
-        this.getTaskCollaboratorsCount(userId),
-        this.getRecentProjects(userId),
-        this.getRecentActivity(userId)
-      ]);
+  try {
+    // Obtener todas las métricas en paralelo para mejorar el rendimiento
+    const [
+      activeProjects,
+      pendingTasks,
+      completedTasks,
+      taskCollaborators,
+      recentProjects,
+      recentActivity,
+      projectProgress // ⬅️ Agregar esta línea
+    ] = await Promise.all([
+      this.getActiveProjects(userId),
+      this.getPendingTasks(userId),
+      this.getCompletedTasks(userId),
+      this.getTaskCollaboratorsCount(userId),
+      this.getRecentProjects(userId),
+      this.getRecentActivity(userId),
+      this.getProjectProgress(userId) // ⬅️ Agregar esta línea
+    ]);
 
-      return {
-        activeProjects,
-        pendingTasks,
-        completedTasks,
-        taskCollaborators,
-        recentProjects,
-        recentActivity
-      };
-    } catch (error) {
-      console.error('Error al obtener métricas del dashboard:', error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        throw new Error(`Error de base de datos al obtener métricas del dashboard: ${error.message}`);
-      } else if (error instanceof Prisma.PrismaClientValidationError) {
-        throw new Error(`Error de validación al obtener métricas del dashboard: ${error.message}`);
-      } else {
-        throw new Error(`Error al obtener métricas del dashboard: ${error.message || 'Error desconocido'}`);
-      }
+    return {
+      activeProjects,
+      pendingTasks,
+      completedTasks,
+      taskCollaborators,
+      recentProjects,
+      recentActivity,
+      projectProgress // ⬅️ Agregar esta línea
+    };
+  } catch (error) {
+    console.error('Error al obtener métricas del dashboard:', error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      throw new Error(`Error de base de datos al obtener métricas del dashboard: ${error.message}`);
+    } else if (error instanceof Prisma.PrismaClientValidationError) {
+      throw new Error(`Error de validación al obtener métricas del dashboard: ${error.message}`);
+    } else {
+      throw new Error(`Error al obtener métricas del dashboard: ${error.message || 'Error desconocido'}`);
     }
   }
+}
+
+  /**
+ * Obtiene el progreso real de los proyectos del usuario
+ * @param userId ID del usuario autenticado
+ * @param limit Límite opcional de resultados (por defecto 5)
+ * @returns Información sobre el progreso de proyectos del usuario
+ */
+async getProjectProgress(userId: number, limit = 5): Promise<ProjectProgressMetric> {
+  try {
+    // Obtener proyectos del usuario con conteo de tareas
+    const projects = await this.prisma.project.findMany({
+      where: {
+        status: {
+          in: ['Active', 'Inactive', 'Completed', 'On Hold'] // Usar tus estados reales
+        },
+        OR: [
+          { owner_id: userId },
+          { 
+            members: {
+              some: {
+                user_id: userId
+              }
+            }
+          }
+        ]
+      },
+      take: limit,
+      orderBy: {
+        updatedAt: 'desc',
+      },
+      include: {
+        _count: {
+          select: {
+            tasks: true,
+          },
+        },
+        tasks: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    return {
+      projects: projects.map((project) => {
+        const totalTasks = project._count.tasks;
+        const completedTasks = project.tasks.filter(task => task.status === 'Done').length;
+        const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+        return {
+          id: project.id,
+          name: project.name,
+          totalTasks,
+          completedTasks,
+          progressPercentage,
+          status: project.status,
+        };
+      }),
+    };
+  } catch (error) {
+    console.error('Error al obtener progreso de proyectos:', error);
+    throw new Error('Error al obtener progreso de proyectos');
+  }
+}
 }

@@ -9,7 +9,8 @@ import {
   TaskCollaboratorsMetric, 
   RecentProjectsMetric, 
   RecentActivityMetric,
-  DashboardMetrics
+  DashboardMetrics,
+  ProjectProgressMetric
 } from './dashboard.service';
 
 // Interfaz para el usuario en el request basada en tu AuthService
@@ -188,4 +189,26 @@ export class DashboardController {
       );
     }
   }
+/**
+ * Obtiene información sobre el progreso de proyectos del usuario
+ * @param req Request con información del usuario autenticado
+ * @param limit Número máximo de proyectos a retornar
+ * @returns Métricas de progreso de proyectos del usuario
+ */
+@Get('project-progress')
+async getProjectProgress(
+  @Req() req: AuthenticatedRequest,
+  @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
+): Promise<ProjectProgressMetric> {
+  try {
+    const userId = req.user.userWithoutPassword.id;
+    return await this.dashboardService.getProjectProgress(userId, limit);
+  } catch (error) {
+    throw new HttpException(
+      error.message || 'Error al obtener progreso de proyectos',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
 }
